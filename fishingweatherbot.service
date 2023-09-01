@@ -3,10 +3,10 @@ Desciption=Fishing weather bot
 After=multi-user.target
 
 [Service]
-Type=simple
-ExecStart=/user/share/fishingweatherbot/venv/bin/python /usr/share/fishingweatherbot/main.py
-WorkingDirectory=/user/share/fishingweatherbot
-Restart=always
+Type = simple
+ExecStart = python3 /usr/fishingweatherbot/main.py
+SyslogIdentifier = fishingweatherbot
+Restart = on-failure
 
 [Install]
-WantedBy=multi-user.target
+WantedBy = multi-user.target
