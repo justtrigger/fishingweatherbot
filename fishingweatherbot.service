@@ -1,0 +1,12 @@
+[Unit]
+Desciption=Fishing weather bot
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/user/share/fishingweatherbot/venv/bin/python /usr/share/fishingweatherbot/main.py
+WorkingDirectory=/user/share/fishingweatherbot
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
