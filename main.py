@@ -46,8 +46,7 @@ async def get_weather(place, date, message):
                              dt.datetime.fromtimestamp(data["sys"]["sunrise"]))
         await message.reply(f"{date}\n"
                             f"Погода в городе: {place}\nТемпература: {cur_temp}°C\n"
-                            f"Влажность: {humidity}%\nДавление: 
-                              {round(pressure/1.333)} мм.рт.ст\nВетер: {wind} м/с\n"
+                            f"Влажность: {humidity}%\nДавление: {round(pressure/1.333)} мм.рт.ст\nВетер: {wind} м/с\n"
                             f"Восход солнца: {sunrise_timestamp}\nЗакат солнца: {sunset_timestamp}\nПродолжительность дня: {length_of_the_day}\n"
                             f"Ни хвоста, ни чешуи"
                             )
