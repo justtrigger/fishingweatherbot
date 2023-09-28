@@ -1,0 +1,43 @@
+{
+  "coord": {
+    "lon": 36.1939,
+    "lat": 51.7303
+  },
+  "weather": [
+    {
+      "id": 800,
+      "main": "Clear",
+      "description": "ясно",
+      "icon": "01d"
+    }
+  ],
+  "base": "stations",
+  "main": {
+    "temp": 16.76,
+    "feels_like": 16.03,
+    "temp_min": 15.66,
+    "temp_max": 16.78,
+    "pressure": 1029,
+    "humidity": 59
+  },
+  "visibility": 10000,
+  "wind": {
+    "speed": 1,
+    "deg": 0
+  },
+  "clouds": {
+    "all": 0
+  },
+  "dt": 1695884119,
+  "sys": {
+    "type": 2,
+    "id": 2000072,
+    "country": "RU",
+    "sunrise": 1695871805,
+    "sunset": 1695914517
+  },
+  "timezone": 10800,
+  "id": 538560,
+  "name": "Курск",
+  "cod": 200
+}
