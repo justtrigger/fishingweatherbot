@@ -3,12 +3,10 @@ import datetime as dt
 import requests
 import logging
 from dotenv import load_dotenv
+from prettytable import PrettyTable
 from aiogram import Bot, types
 from aiogram.dispatcher import Dispatcher
 from aiogram.utils import executor
-from aiogram.types import (ReplyKeyboardRemove,
-                           ReplyKeyboardMarkup,
-                           KeyboardButton)
 
 load_dotenv()
 
@@ -22,28 +20,20 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
 
 
-class ForecastMessage:
+WINDDIRECTIONS = ("северный", "северо-восточный", "восточный",
+                  "юго-восточный", "южный", "юго-западный",
+                  "западный", "северо-западный")
+
+
+class WeatherMessage:
     def __init__(self, data, message, saved_user_data) -> None:
         self.message = message
         self.saved_user_data = saved_user_data
-        winddirections = ("северный", "северо-восточный", "восточный",
-                          "юго-восточный", "южный", "юго-западный",
-                          "западный", "северо-западный")
-        if "list" in data:
-            self.place = data["city"]["name"]
-            self.sunrise_timestamp = dt.datetime.fromtimestamp(
-                data["city"]["sunrise"])
-            self.sunset_timestamp = dt.datetime.fromtimestamp(
-                data["city"]["sunset"])
-            self.cur_temp = data["list"][0]["main"]["temp"]
-            self.humidity = data["list"][0]["main"]["humidity"]
-            data = data["list"][0]
-        else:
-            self.place = data["name"]
-            self.sunrise_timestamp = dt.datetime.fromtimestamp(
-                data["sys"]["sunrise"])
-            self.sunset_timestamp = dt.datetime.fromtimestamp(
-                data["sys"]["sunset"])
+        self.place = data["name"]
+        self.sunrise_timestamp = dt.datetime.fromtimestamp(
+            data["sys"]["sunrise"])
+        self.sunset_timestamp = dt.datetime.fromtimestamp(
+            data["sys"]["sunset"])
         self.weather_main = data["weather"][0]["description"]
         self.cur_temp = data["main"]["temp"]
         self.humidity = data["main"]["humidity"]
@@ -54,12 +44,12 @@ class ForecastMessage:
         except KeyError:
             self.wind_gust = round(self.wind_speed, 2)
         wind_deg = int((data["wind"]["deg"] + 22.5) // 45 % 8)
-        self.wind_dir = winddirections[wind_deg]
+        self.wind_dir = WINDDIRECTIONS[wind_deg]
         self.length_of_the_day = self.sunset_timestamp - self.sunrise_timestamp
         self.sunset_timestamp = self.sunset_timestamp.strftime('%H:%M:%S')
         self.sunrise_timestamp = self.sunrise_timestamp.strftime('%H:%M:%S')
 
-    def __str__(self) -> str:
+    def readableanswer(self):
         return (f"{saved_user_data[self.message.from_id]['forecast_type']}: "
                 f"{self.saved_user_data[self.message.from_id]['place']}\n"
                 f"Температура: {self.cur_temp}°C, {self.weather_main}\n"
@@ -74,21 +64,90 @@ class ForecastMessage:
                 )
 
 
+class ForecastMessage:
+    def __init__(self, data, message, saved_user_data) -> None:
+        self.message = message
+        self.saved_user_data = saved_user_data
+        self.data = data
+        self.place = data["city"]["name"]
+        # получение данных о восходе и закате и вычисление
+        # продолжительности дня
+        self.sunrise_timestamp = dt.datetime.fromtimestamp(
+            data["city"]["sunrise"])
+        self.sunset_timestamp = dt.datetime.fromtimestamp(
+            data["city"]["sunset"])
+        self.length_of_the_day = self.sunset_timestamp - self.sunrise_timestamp
+        self.sunset_timestamp = self.sunset_timestamp.strftime('%H:%M:%S')
+        self.sunrise_timestamp = self.sunrise_timestamp.strftime('%H:%M:%S')
+
+        self.cur_temp = data["list"][0]["main"]["temp"]
+        self.humidity = data["list"][0]["main"]["humidity"]
+        data = data["list"][0]
+        self.weather_main = data["weather"][0]["description"]
+        self.cur_temp = data["main"]["temp"]
+        self.humidity = data["main"]["humidity"]
+        self.pressure = data["main"]["pressure"]
+        self.wind_speed = data["wind"]["speed"]
+        try:
+            self.wind_gust = round(self.wind_speed + data["wind"]["gust"], 2)
+        except KeyError:
+            self.wind_gust = round(self.wind_speed, 2)
+        wind_deg = int((data["wind"]["deg"] + 22.5) // 45 % 8)
+        self.wind_dir = WINDDIRECTIONS[wind_deg]
+
+    def readableanswer(self) -> PrettyTable:
+        t1 = PrettyTable([''] + [dt.datetime.fromtimestamp(self.data["list"][i]["dt"]).strftime('%H:%M') for i in range(0,4)])
+        t1.add_row(['Температура'] + [self.data["list"][i]["main"]["temp"] for i in range(0,4)])
+        t1.add_row(['Влажность'] + [self.data["list"][i]["main"]["humidity"] for i in range(0,4)])
+        t1.add_row(['Давление'] + [self.data["list"][i]["main"]["pressure"] for i in range(0,4)])
+        t1.add_row(['Ветер'] + [self.data["list"][i]["wind"]["speed"] for i in range(0,4)])
+        t2 = PrettyTable([''] + [dt.datetime.fromtimestamp(self.data["list"][i]["dt"]).strftime('%H:%M') for i in range(4,8)])
+        t2.add_row(['Температура'] + [self.data["list"][i]["main"]["temp"] for i in range(4,8)])
+        t2.add_row(['Влажность'] + [self.data["list"][i]["main"]["humidity"] for i in range(4,8)])
+        t2.add_row(['Давление'] + [self.data["list"][i]["main"]["pressure"] for i in range(4,8)])
+        t2.add_row(['Ветер'] + [self.data["list"][i]["wind"]["speed"] for i in range(4,8)])
+        return (f"{saved_user_data[self.message.from_id]['forecast_type']}: "
+                f"{self.saved_user_data[self.message.from_id]['place']}\n"
+                f"```{t1}```"
+                f"```{t2}```"
+                f"Восход/закат солнца: {self.sunrise_timestamp} / "
+                f"{self.sunset_timestamp}\n"
+                f"Продолжительность дня: {self.length_of_the_day}\n"
+                f"Ни хвоста, ни чешуи"
+                )
+    
+        # return (f"{saved_user_data[self.message.from_id]['forecast_type']}: "
+        #        f"{self.saved_user_data[self.message.from_id]['place']}\n"
+        #        f"Температура: {self.cur_temp}°C, {self.weather_main}\n"
+        #        f"Влажность: {self.humidity}%\n"
+        #        f"Давление: {round(self.pressure/1.333)} мм.рт.ст\n"
+        #        f"Ветер: {self.wind_dir}, {self.wind_speed} м/с,"
+        #        f" порывы до {self.wind_gust} м/с\n"
+        #        f"Восход/закат солнца: {self.sunrise_timestamp} / "
+        #        f"{self.sunset_timestamp}\n"
+        #        f"Продолжительность дня: {self.length_of_the_day}\n"
+        #        f"Ни хвоста, ни чешуи"
+        #        )
+
+
 @dp.message_handler(commands=["start"])
 async def start_command(message: types.Message):
     logging.info(f"{message.from_id} connected")
-    go_to_menu(message)
+    await go_to_menu(message)
 
 
 async def get_weather(place, date, forecast_type, message):
     try:
-        go_to_menu(message, place, forecast_type)
+        # go_to_menu(message, place, forecast_type)
         logging.info(f"{message.from_id} requesting {place}")
         logging.info(f"http://api.openweathermap.org/data/2.5/{forecast_type}?{place}&lang=ru&units=metric&appid={OPENWEATHERMAP_TOKEN}")
         response = requests.get(f"http://api.openweathermap.org/data/2.5/{forecast_type}?{place}&lang=ru&units=metric&appid={OPENWEATHERMAP_TOKEN}")
         data = response.json()
         logging.info(data)
-        await message.reply(ForecastMessage(data, message, saved_user_data))
+        if forecast_type == "weather":
+            await message.reply(WeatherMessage(data, message, saved_user_data).readableanswer())
+        if forecast_type == "forecast":
+            await message.reply(ForecastMessage(data, message, saved_user_data).readableanswer(), parse_mode="MarkdownV2")
     except Exception as error:
         logging.exception(error)
 
