@@ -20,9 +20,18 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher(bot)
 
 
-WINDDIRECTIONS = ("северный", "северо-восточный", "восточный",
-                  "юго-восточный", "южный", "юго-западный",
-                  "западный", "северо-западный")
+WINDDIRECTIONSFULL = ("северный", "северо-восточный", "восточный",
+                      "юго-восточный", "южный", "юго-западный",
+                      "западный", "северо-западный")
+WINDDIRECTIONSSHORT = ("Сев", "С-В", "Вст", "Ю-В", "Южн", "Ю-З", "Зап", "С-З")
+
+
+def wind_dir(deg, len):
+    wind_deg = int((deg + 22.5) // 45 % 8)
+    if len == 'full':
+        return WINDDIRECTIONSFULL[wind_deg]
+    if len == 'short':
+        return WINDDIRECTIONSSHORT[wind_deg]
 
 
 class WeatherMessage:
@@ -43,8 +52,7 @@ class WeatherMessage:
             self.wind_gust = round(self.wind_speed + data["wind"]["gust"], 2)
         except KeyError:
             self.wind_gust = round(self.wind_speed, 2)
-        wind_deg = int((data["wind"]["deg"] + 22.5) // 45 % 8)
-        self.wind_dir = WINDDIRECTIONS[wind_deg]
+        self.wind_dir = wind_dir(data["wind"]["deg"], 'full')
         self.length_of_the_day = self.sunset_timestamp - self.sunrise_timestamp
         self.sunset_timestamp = self.sunset_timestamp.strftime('%H:%M:%S')
         self.sunrise_timestamp = self.sunrise_timestamp.strftime('%H:%M:%S')
@@ -80,42 +88,46 @@ class ForecastMessage:
         self.sunset_timestamp = self.sunset_timestamp.strftime('%H:%M:%S')
         self.sunrise_timestamp = self.sunrise_timestamp.strftime('%H:%M:%S')
 
-        self.cur_temp = data["list"][0]["main"]["temp"]
-        self.humidity = data["list"][0]["main"]["humidity"]
-        data = data["list"][0]
-        self.weather_main = data["weather"][0]["description"]
-        self.cur_temp = data["main"]["temp"]
-        self.humidity = data["main"]["humidity"]
-        self.pressure = data["main"]["pressure"]
-        self.wind_speed = data["wind"]["speed"]
-        try:
-            self.wind_gust = round(self.wind_speed + data["wind"]["gust"], 2)
-        except KeyError:
-            self.wind_gust = round(self.wind_speed, 2)
-        wind_deg = int((data["wind"]["deg"] + 22.5) // 45 % 8)
-        self.wind_dir = WINDDIRECTIONS[wind_deg]
-
-    def readableanswer(self) -> PrettyTable:
-        t1 = PrettyTable([''] + [dt.datetime.fromtimestamp(self.data["list"][i]["dt"]).strftime('%H:%M') for i in range(0,4)])
-        t1.add_row(['Температура'] + [self.data["list"][i]["main"]["temp"] for i in range(0,4)])
-        t1.add_row(['Влажность'] + [self.data["list"][i]["main"]["humidity"] for i in range(0,4)])
-        t1.add_row(['Давление'] + [self.data["list"][i]["main"]["pressure"] for i in range(0,4)])
-        t1.add_row(['Ветер'] + [self.data["list"][i]["wind"]["speed"] for i in range(0,4)])
-        t2 = PrettyTable([''] + [dt.datetime.fromtimestamp(self.data["list"][i]["dt"]).strftime('%H:%M') for i in range(4,8)])
-        t2.add_row(['Температура'] + [self.data["list"][i]["main"]["temp"] for i in range(4,8)])
-        t2.add_row(['Влажность'] + [self.data["list"][i]["main"]["humidity"] for i in range(4,8)])
-        t2.add_row(['Давление'] + [self.data["list"][i]["main"]["pressure"] for i in range(4,8)])
-        t2.add_row(['Ветер'] + [self.data["list"][i]["wind"]["speed"] for i in range(4,8)])
+    def readableanswer(self, lp=0, days=1) -> PrettyTable:
+        t = [''] * 3 * days
+        result_table = ''
+        for i in range(0, days + 2):
+            t[i] = PrettyTable([''] + [dt.datetime.fromtimestamp(
+                self.data["list"][i]["dt"]).strftime('%H:%M')
+                for i in range(lp, lp + 3)])
+            t[i].add_row(['Погода'] +
+                         [self.data["list"][i]["weather"][0]["description"]
+                          for i in range(lp, lp + 3)])
+            t[i].add_row(['Темп, °C'] +
+                         [round(self.data["list"][i]["main"]["temp"])
+                          for i in range(lp, lp + 3)])
+            t[i].add_row(['Влаж, %'] +
+                         [self.data["list"][i]["main"]["humidity"]
+                          for i in range(lp, lp + 3)])
+            t[i].add_row(['Давл, мм.'] +
+                         [round(self.data["list"][i]["main"]["pressure"]/1.333)
+                          for i in range(lp, lp + 3)])
+            t[i].add_row(['Ветер'] +
+                         [wind_dir(self.data["list"][i]["wind"]["deg"], 'short')
+                          for i in range(lp, lp + 3)])
+            t[i].add_row(['Скор, м/с'] +
+                         [round(self.data["list"][i]["wind"]["speed"])
+                          for i in range(lp, lp + 3)])
+            t[i].add_row(['Порыв, м/с'] +
+                         [round(self.data["list"][i]["wind"]["gust"] +
+                          self.data["list"][i]["wind"]["speed"])
+                          for i in range(lp, lp + 3)])
+            lp += 3
+            result_table += f"```{t[i]}```\n"
         return (f"{saved_user_data[self.message.from_id]['forecast_type']}: "
                 f"{self.saved_user_data[self.message.from_id]['place']}\n"
-                f"```{t1}```"
-                f"```{t2}```"
+                f"{result_table}"
                 f"Восход/закат солнца: {self.sunrise_timestamp} / "
                 f"{self.sunset_timestamp}\n"
                 f"Продолжительность дня: {self.length_of_the_day}\n"
                 f"Ни хвоста, ни чешуи"
                 )
-    
+
         # return (f"{saved_user_data[self.message.from_id]['forecast_type']}: "
         #        f"{self.saved_user_data[self.message.from_id]['place']}\n"
         #        f"Температура: {self.cur_temp}°C, {self.weather_main}\n"
@@ -145,9 +157,12 @@ async def get_weather(place, date, forecast_type, message):
         data = response.json()
         logging.info(data)
         if forecast_type == "weather":
-            await message.reply(WeatherMessage(data, message, saved_user_data).readableanswer())
+            await message.reply(WeatherMessage(
+                data, message, saved_user_data).readableanswer())
         if forecast_type == "forecast":
-            await message.reply(ForecastMessage(data, message, saved_user_data).readableanswer(), parse_mode="MarkdownV2")
+            await message.reply(ForecastMessage(
+                data, message, saved_user_data).readableanswer(),
+                parse_mode="MarkdownV2")
     except Exception as error:
         logging.exception(error)
 
@@ -213,7 +228,8 @@ async def go_to_menu(message: types.Message, place="Курск",
         "Выбор дня": date_menu,
     }
     try:
-        keyboard = types.ReplyKeyboardMarkup(keyboard=menu_levels[message.text])
+        keyboard = types.ReplyKeyboardMarkup(
+            keyboard=menu_levels[message.text])
         await message.reply(f"{message.text}", reply_markup=keyboard)
     except KeyError:
         if message.text in cities:
