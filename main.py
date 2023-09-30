@@ -23,7 +23,21 @@ dp = Dispatcher(bot)
 WINDDIRECTIONSFULL = ("северный", "северо-восточный", "восточный",
                       "юго-восточный", "южный", "юго-западный",
                       "западный", "северо-западный")
-WINDDIRECTIONSSHORT = ("Сев", "С-В", "Вст", "Ю-В", "Южн", "Ю-З", "Зап", "С-З")
+WINDDIRECTIONSSHORT = ("\U00002B07", "\U00002199",
+                       "\U00002B05", "\U00002196",
+                       "\U00002B06", "\U00002197",
+                       "\U000027A1", "\U00002198")
+EMOJI_UTF_CODE = {
+    'ясно': '\U00002600',
+    'небольшая облачность': '\U0001F324',
+    'переменная облачность': '\U000026C5',
+    'облачно с прояснениями': '\U0001F325',
+    'пасмурно': '\U00002601',
+    'дождь': '\U0001F327',
+    'снег': '\U0001F328',
+    'гроза': '\U000026C8',
+    'туман': '\U0001F32B',
+}
 
 
 def wind_dir(deg, len):
@@ -43,7 +57,12 @@ class WeatherMessage:
             data["sys"]["sunrise"])
         self.sunset_timestamp = dt.datetime.fromtimestamp(
             data["sys"]["sunset"])
-        self.weather_main = data["weather"][0]["description"]
+        try:
+            self.weather_main = EMOJI_UTF_CODE[
+                str(data["weather"][0]["description"])]
+        except KeyError:
+            logging.ERROR(f"не найден смайл погоды "
+                          f"'{data['weather'][0]['description']}'")
         self.cur_temp = data["main"]["temp"]
         self.humidity = data["main"]["humidity"]
         self.pressure = data["main"]["pressure"]
@@ -95,9 +114,15 @@ class ForecastMessage:
             t[i] = PrettyTable([''] + [dt.datetime.fromtimestamp(
                 self.data["list"][i]["dt"]).strftime('%H:%M')
                 for i in range(lp, lp + 3)])
-            t[i].add_row(['Погода'] +
-                         [self.data["list"][i]["weather"][0]["description"]
-                          for i in range(lp, lp + 3)])
+            try:
+                t[i].add_row(['Погода'] +
+                             [EMOJI_UTF_CODE[str(
+                                 self.data["list"][i][
+                                     "weather"][0]["description"])]
+                              for i in range(lp, lp + 3)])
+            except KeyError:
+                logging.ERROR(f"не найден смайл погоды "
+                              f"'{self.data['list'][i]['weather'][0]['description']}'")
             t[i].add_row(['Темп, °C'] +
                          [round(self.data["list"][i]["main"]["temp"])
                           for i in range(lp, lp + 3)])
@@ -128,19 +153,6 @@ class ForecastMessage:
                 f"Ни хвоста, ни чешуи"
                 )
 
-        # return (f"{saved_user_data[self.message.from_id]['forecast_type']}: "
-        #        f"{self.saved_user_data[self.message.from_id]['place']}\n"
-        #        f"Температура: {self.cur_temp}°C, {self.weather_main}\n"
-        #        f"Влажность: {self.humidity}%\n"
-        #        f"Давление: {round(self.pressure/1.333)} мм.рт.ст\n"
-        #        f"Ветер: {self.wind_dir}, {self.wind_speed} м/с,"
-        #        f" порывы до {self.wind_gust} м/с\n"
-        #        f"Восход/закат солнца: {self.sunrise_timestamp} / "
-        #        f"{self.sunset_timestamp}\n"
-        #        f"Продолжительность дня: {self.length_of_the_day}\n"
-        #        f"Ни хвоста, ни чешуи"
-        #        )
-
 
 @dp.message_handler(commands=["start"])
 async def start_command(message: types.Message):
@@ -148,10 +160,24 @@ async def start_command(message: types.Message):
     await go_to_menu(message)
 
 
-async def get_weather(place, date, forecast_type, message):
+async def get_weather(place, forecast_type, message):
     try:
-        # go_to_menu(message, place, forecast_type)
-        logging.info(f"{message.from_id} requesting {place}")
+        logging.info(f"{message.from_id} запрашивает "
+                     f"{forecast_type} для {place}")
+        lp = 0
+        days = 1
+        if forecast_type == "Погода сейчас":
+            forecast_type = "weather"
+        elif forecast_type == "Прогноз на сутки":
+            forecast_type = "forecast"
+        elif forecast_type == "Прогноз на завтра":
+            forecast_type = "forecast"
+            lp = 7 - dt.datetime.now().hour//3
+        elif forecast_type == "Прогноз на выходные":
+            forecast_type = "forecast"
+            lp = (7 - dt.datetime.now().hour//3 +
+                  (5 - dt.datetime.now().weekday()) * 8)
+            days = 2
         logging.info(f"http://api.openweathermap.org/data/2.5/{forecast_type}?{place}&lang=ru&units=metric&appid={OPENWEATHERMAP_TOKEN}")
         response = requests.get(f"http://api.openweathermap.org/data/2.5/{forecast_type}?{place}&lang=ru&units=metric&appid={OPENWEATHERMAP_TOKEN}")
         data = response.json()
@@ -161,7 +187,7 @@ async def get_weather(place, date, forecast_type, message):
                 data, message, saved_user_data).readableanswer())
         if forecast_type == "forecast":
             await message.reply(ForecastMessage(
-                data, message, saved_user_data).readableanswer(),
+                data, message, saved_user_data).readableanswer(lp, days),
                 parse_mode="MarkdownV2")
     except Exception as error:
         logging.exception(error)
@@ -184,7 +210,6 @@ async def go_to_menu(message: types.Message, place="Курск",
             saved_user_data[message.from_id]["forecast_type"] = "weather"
         if saved_user_data[message.from_id]["api"] is None:
             saved_user_data[message.from_id]["api"] = "openweather"
-    date = dt.datetime.now().strftime('%Y-%m-%d %H:%M')
     cities = ["Курск", "Железногорск", "Курчатов", "Льгов", "Щигры",
               "Рыльск", "Обоянь", "Суджа", "Фатеж"]
     ponds = {"Стадион": "lat=51.831599&lon=36.010743",
@@ -240,9 +265,9 @@ async def go_to_menu(message: types.Message, place="Курск",
             saved_user_data[message.from_id]["place"] = message.text
         if message.text in dates:
             place = f"q={place}"
-            forecast_type = dates[message.text]
+            forecast_type = message.text
             saved_user_data[message.from_id]["forecast_type"] = message.text
-        await get_weather(place, date, forecast_type, message)
+        await get_weather(place, forecast_type, message)
 
 
 if __name__ == "__main__":
